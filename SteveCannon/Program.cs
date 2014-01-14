@@ -144,7 +144,11 @@ namespace SteveCannon
             if (stonehearth != null && stonehearth.Exists && launchSH)
             {
                 Console.WriteLine("Launching Stonehearth...");
-                Process.Start(stonehearth.FullName);
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = stonehearth.FullName;
+                psi.WorkingDirectory = stonehearth.DirectoryName;
+
+                Process.Start(psi);
             }
             else
                 Console.ReadLine();
