@@ -338,7 +338,7 @@ namespace SteveCannon
                     throw new UpdateException(this, "Mod exists in JSON, but uri is not defined");
 
                 if (uri.Type != JTokenType.String)
-                    throw new UpdateException(this, "Mod specified URI, but is not an Uri.");
+                    throw new UpdateException(this, "Mod specified URI, but is not a string.");
 
                 // No last-modified has been set; set the uri
                 this.Uri = new Uri(uri.Value<string>());
@@ -349,21 +349,37 @@ namespace SteveCannon
                 if (lastModified != null)
                 {
                     // OK..?
-                    if (lastModified.Type != JTokenType.String)
-                        throw new UpdateException(this, "JSON has last_modified entry, but is not a string");
-
-                    ServerModifiedTime = lastModified.Value<DateTime>();
-
-                    if (ServerModifiedTime > ArchiveModifiedTime)
+                    if (lastModified.Type == JTokenType.Date)
                     {
-                        Console.WriteLine("JSON reports last_modified {0}, which is newer than {1}", ServerModifiedTime, ArchiveModifiedTime);
-                        Action = UpdateAction.Update;
-                        downloadFile();
+                        this.ServerModifiedTime = lastModified.Value<DateTime>();
+                    }
+                    else if (lastModified.Type == JTokenType.String)
+                    {
+                        // ... try to parse it
+                        DateTime result;
+                        if (!DateTime.TryParse(lastModified.Value<string>(), out result))
+                            throw new UpdateException(this, "Unable to parse date string provided (" + lastModified.Value<string>() + ")");
+                        this.ServerModifiedTime = result;
+                    }
+                    else if (lastModified.Type == JTokenType.Integer)
+                    {
+                        this.ServerModifiedTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(lastModified.Value<int>());
+                    }
+                    else
+                        throw new UpdateException(this, "Expected last_modified to be either a string or a value but got " + lastModified.Type.ToString());
+
+                    // Now that we got the time, check it.
+                    if (this.ServerModifiedTime > this.ArchiveModifiedTime)
+                    {
+                        Console.WriteLine("JSON reports last_modified {0}, which is newer than {1}", this.ServerModifiedTime, this.ArchiveModifiedTime);
+                        this.Action = UpdateAction.Update;
+                        this.downloadFile();
                         return;
                     }
 
-                    Console.WriteLine("JSON reports last_modified {0}, which is older than {1}", ServerModifiedTime, ArchiveModifiedTime);
-                    Action = UpdateAction.None;
+                    Console.WriteLine("JSON reports last_modified {0}, which is older than {1}", this.ServerModifiedTime, this.ArchiveModifiedTime);
+                    this.Action = UpdateAction.None;
+
                     return;
                 }
 
@@ -382,13 +398,13 @@ namespace SteveCannon
 
         protected void downloadFile(Stream stream)
         {
-            Console.WriteLine("Attempt to write {0}", Archive.Name);
-            using (FileStream fStr = Archive.Open(FileMode.Truncate))
+            Console.WriteLine("Attempt to write {0}", this.Archive.Name);
+            using (FileStream fStr = this.Archive.Open(FileMode.Truncate))
                 stream.CopyTo(fStr);
 
             // Set the proper time
-            if (ServerModifiedTime.HasValue)
-                File.SetLastWriteTime(Archive.FullName, ServerModifiedTime.Value);
+            if (this.ServerModifiedTime.HasValue)
+                File.SetLastWriteTime(this.Archive.FullName, this.ServerModifiedTime.Value);
             else
                 Console.WriteLine("[WARNING] Unable to find LastModified date; the current local time will be used.");
 
